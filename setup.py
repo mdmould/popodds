@@ -1,16 +1,23 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+
+name = 'popodds'
+version = '0.0.3'
+
+with open('README.md', 'r') as f:
+    long_description = f.read().strip()
 
 setup(
-    name='popodds',
-    version='0.0.1',
-    description='popodds',
-    long_description='popodds',
-    long_description_content_type='text/x-rst',
-    url='https://github.com/mdmould/popodds',
+    name=name,
+    version=version,
+    description='Simple package for Bayesian model comparison.',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    url=f'https://github.com/mdmould/{name}',
+    download_url=f'https://github.com/mdmould/{name}/archive/refs/tags/{version}.tar.gz',
     author='Matthew Mould',
     author_email='mattdmould@gmail.com',
     license='MIT',
-    packages=['popodds'],
+    packages=find_packages(),
     install_requires=['numpy', 'scipy', 'kalepy'],
     python_requires='>=3.7',
     )
