@@ -8,10 +8,14 @@ def log_odds(*args, prior_odds=1, **kwargs):
     
     Arguments
     ---------
-    sim_samples: array-like (M,) or (D, M,)
-        Samples from a simulated model.
-        Can be one-dimensional for univariate data with M samples.
-        Must have shape (D, M,) for D-dimensional data.
+    model: callable, array-like (N,) or (D, M,)
+        New model prior.
+        - If a callable it should return the correctly normalized model
+          density for an input array-like (D, N,).
+        - If an array-like (N,) it should contain evaluations of the model
+          at pe_samples.
+        - If an array-like (D, M,) it should contain model samples that can
+          be used to construct a density estimate.
 
     pe_samples: array-like (N,) or (D, N,)
         Samples from a parameter estimation posterior.
@@ -27,8 +31,8 @@ def log_odds(*args, prior_odds=1, **kwargs):
         - If an array-like (D, K,) it should contain prior samples that can
           be used to construct a density estimate.
 
-    sim_bounds: None, bool, or array-like [optional, Default = None]
-        Parameter bounds used for density estimate of simulation samples.
+    model_bounds: None, bool, or array-like [optional, Default = None]
+        Parameter bounds used for density estimate if model is samples.
         - A single value applies to all parameter dimensions.
         - For univariate data an array-like (2,) is allowed.
         - For multivariate data an array-like with D rows is allowed, where
@@ -39,8 +43,8 @@ def log_odds(*args, prior_odds=1, **kwargs):
         See kalepy.KDE for more details.
 
     pe_bounds: None, bool, or array-like [optional, Default = None]
-        Parameter bounds used if pe_prior requires density estimate.
-        Allowed values as for sim_bounds.
+        Parameter bounds used for density estimate if pe_prior is samples.
+        Allowed values as for model_bounds.
         
     prior_odds: number [optional, Default = 1]
         Prior ratio for new model over original.
@@ -56,17 +60,20 @@ class ModelComparison:
     """
     
     def __init__(
-        self, sim_samples, pe_samples, pe_prior, sim_bounds=None,
-        pe_bounds=None,
+        self, model, pe_samples, pe_prior, model_bounds=None, pe_bounds=None,
         ):
         """Initialize comparison class with priors and posteriors.
         
         Arguments
         ---------
-        sim_samples: array-like (M,) or (D, M,)
-            Samples from a simulated model.
-            Can be one-dimensional for univariate data with M samples.
-            Must have shape (D, M,) for D-dimensional data.
+        model: callable, array-like (N,) or (D, M,)
+            New model prior.
+            - If a callable it should return the correctly normalized model
+              density for an input array-like (D, N,).
+            - If an array-like (N,) it should contain evaluations of the model
+              at pe_samples.
+            - If an array-like (D, M,) it should contain model samples that can
+              be used to construct a density estimate.
             
         pe_samples: array-like (N,) or (D, N,)
             Samples from a parameter estimation posterior.
@@ -82,8 +89,8 @@ class ModelComparison:
             - If an array-like (D, K,) it should contain prior samples that can
               be used to construct a density estimate.
             
-        sim_bounds: None, bool, or array-like [optional, Default = None]
-            Parameter bounds used for density estimate of simulation samples.
+        model_bounds: None, bool, or array-like [optional, Default = None]
+            Parameter bounds used for density estimate if model is samples.
             - A single value applies to all parameter dimensions.
             - For univariate data an array-like (2,) is allowed.
             - For multivariate data an array-like with D rows is allowed, where
@@ -94,8 +101,8 @@ class ModelComparison:
             See kalepy.KDE for more details.
             
         pe_bounds: None, bool, or array-like [optional, Default = None]
-            Parameter bounds used if pe_prior requires density estimate.
-            Allowed values as for sim_bounds.
+            Parameter bounds used for density estimate if pe_prior is samples.
+            Allowed values as for model_bounds.
         
         """
         
@@ -105,28 +112,13 @@ class ModelComparison:
         assert sim_samples.shape[0] < sim_samples.shape[1]
         assert self.pe_samples.shape[0] < self.pe_samples.shape[1]
         assert sim_samples.shape[0] == self.pe_samples.shape[0]
-        n_dim, n_pe = self.pe_samples.shape
+        self.n_dim, self.n_pe = self.pe_samples.shape
         
-        # Density estimate for simulation samples to evaluate on pe_samples
-        self.sim_prior = self._kde(sim_samples, bounds=sim_bounds)
+        # Process model and PE prior
+        self.model = self._process_prior(model, bounds=model_bounds)
+        self.pe_prior = self._process_prior(pe_prior, bounds=pe_bounds)
         
-        # Process pe_prior, which can be callable or array-like
-        # If a callable it will be evaluated on pe_samples
-        if callable(pe_prior):
-            self.pe_prior = pe_prior
-        # If an array-like it can be prior evaluations or prior samples
-        else:
-            pe_prior = np.atleast_1d(pe_prior)
-            if pe_prior.ndim == 1:
-                # Prior density evaluated on pe_samples
-                assert pe_prior.size == n_pe
-                self.pe_prior = lambda _: pe_prior
-            elif pe_prior.ndim == 2:
-                # Prior samples for density estimate to evaluate on pe_samples
-                assert pe_prior.shape[0] < pe_prior.shape[1]
-                assert pe_prior.shape[0] == n_dim
-                self.pe_prior = self._kde(pe_prior, bounds=pe_bounds)
-                
+        # Cache KDE evaluations on pe_samples
         self._cache_pdf = None
         self._cache_prior = None
         
@@ -235,4 +227,59 @@ class ModelComparison:
         """
 
         return np.log10(self._bayes_factor(pdf, prior))
+    
+    def _process_prior(self, prior, bounds=None):
+        """Process a prior model.
+        
+        Define a callable that returns density evaluations from a model.
+        
+        Arguments
+        ---------
+        prior: callable, array-like (N,) or (D, M,)
+            The model to process.
+            - If a callable it should return the correctly normalized model
+              density for an input array-like (D, N,).
+            - If an array-like (N,) it should contain evaluations of the model
+              at pe_samples.
+            - If an array-like (D, M,) it should contain model samples that can
+              be used to construct a density estimate.
+              
+        bounds: None, bool, or array-like [optional, Default = None]
+            Parameter bounds used for density estimate if prior is samples.
+            - A single value applies to all parameter dimensions.
+            - For univariate data an array-like (2,) is allowed.
+            - For multivariate data an array-like with D rows is allowed, where
+              each row is either a single value or array-like (2,).
+            - In all cases a None or False indicates no bound(s), a True
+              indicates the bound is estimated from sim_samples, while a number
+              gives the location of the bound.
+            See kalepy.KDE for more details.
+              
+        Returns
+        -------
+        callable
+            The callable prior model which returns density evaluations.
+        
+        """
+        
+        # If a callable it will be evaluated on pe_samples
+        if callable(prior):
+            _prior = prior
+        
+        # If an array-like it can be prior evaluations or prior samples
+        else:
+            prior = np.atleast_1d(prior)
+
+            # Prior density evaluated on pe_samples
+            if prior.ndim == 1:
+                assert prior.size == self.n_pe
+                _prior lambda _: prior
+
+            # Prior samples for density estimate to evaluate on pe_samples
+            elif prior.ndim == 2:
+                assert prior.shape[0] < prior.shape[1]
+                assert prior.shape[0] == self.n_dim
+                _prior = self._kde(prior, bounds=None)
+            
+        return _prior
 
