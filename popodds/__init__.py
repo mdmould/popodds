@@ -75,9 +75,8 @@ class ModelComparison:
             - If an array-like (D, M,) it should contain model samples that can
               be used to construct a density estimate.
             
-        pe_samples: array-like (N,) or (D, N,)
+        pe_samples: array-like (D, N,)
             Samples from a parameter estimation posterior.
-            Can be one-dimensional for univariate data with N samples.
             Must have shape (D, N,) for D-dimensional data.
             
         pe_prior: callable, array-like (N,) or (D, K,)
@@ -107,11 +106,8 @@ class ModelComparison:
         """
         
         # Sample shapes should be (number of dimensions, number of samples,)
-        sim_samples = np.atleast_2d(sim_samples)
         self.pe_samples = np.atleast_2d(pe_samples)
-        assert sim_samples.shape[0] < sim_samples.shape[1]
         assert self.pe_samples.shape[0] < self.pe_samples.shape[1]
-        assert sim_samples.shape[0] == self.pe_samples.shape[0]
         self.n_dim, self.n_pe = self.pe_samples.shape
         
         # Process model and PE prior
@@ -133,7 +129,7 @@ class ModelComparison:
         """
         
         if self._cache_pdf is None:
-            self._cache_pdf = self.sim_prior(self.pe_samples)
+            self._cache_pdf = self.model(self.pe_samples)
         if self._cache_prior is None:
             self._cache_prior = self.pe_prior(self.pe_samples)
         
@@ -273,7 +269,7 @@ class ModelComparison:
             # Prior density evaluated on pe_samples
             if prior.ndim == 1:
                 assert prior.size == self.n_pe
-                _prior lambda _: prior
+                _prior = lambda _: prior
 
             # Prior samples for density estimate to evaluate on pe_samples
             elif prior.ndim == 2:
