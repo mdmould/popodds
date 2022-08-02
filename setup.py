@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 name = 'popodds'
-version = '0.0.5'
+version = '0.0.6'
 
 with open('README.md', 'r') as f:
     long_description = f.read().strip()
@@ -13,7 +13,6 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url=f'https://github.com/mdmould/{name}',
-    download_url=f'https://github.com/mdmould/{name}/archive/refs/tags/{version}.tar.gz',
     author='Matthew Mould',
     author_email='mattdmould@gmail.com',
     license='MIT',
