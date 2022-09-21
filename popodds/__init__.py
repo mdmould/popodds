@@ -275,7 +275,7 @@ class ModelComparison:
             elif prior.ndim == 2:
                 assert prior.shape[0] < prior.shape[1]
                 assert prior.shape[0] == self.n_dim
-                _prior = self._kde(prior, bounds=None)
+                _prior = self._kde(prior, bounds=bounds)
             
         return _prior
 
