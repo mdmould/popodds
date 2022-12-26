@@ -3,6 +3,7 @@ from scipy.stats import gaussian_kde
 import kalepy
 
 
+## TODO: change to natural log?
 def log_odds(*args, prior_odds=1, **kwargs):
     """ Compute the log_10 posterior odds for a model over the original prior.
     
@@ -54,6 +55,8 @@ def log_odds(*args, prior_odds=1, **kwargs):
     return ModelComparison(*args, **kwargs)() + np.log10(prior_odds)
 
 
+## TODO: change to natural log?
+## TODO: log computation
 class ModelComparison:
     """Perform Bayesan model comparison on event posteriors.
     
