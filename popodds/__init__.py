@@ -147,6 +147,9 @@ class ModelComparison:
         return KDE(dist, bounds=bounds).log_pdf
 
 
+## TODO
+## Make bounded KDE more efficient
+## Only reflect fraction f * bw of samples across boundaries
 class KDE:
     
     def __init__(self, samples, bandwidth='scott', bounds=None):
