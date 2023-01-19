@@ -1,284 +1,307 @@
 import numpy as np
 from scipy.stats import gaussian_kde
-import kalepy
+from scipy.special import logsumexp
 
 
-## TODO: change to natural log?
-def log_odds(*args, prior_odds=1, **kwargs):
-    """ Compute the log_10 posterior odds for a model over the original prior.
+def log_odds(
+    model,
+    prior,
+    samples,
+    model_bounds=None,
+    prior_bounds=None,
+    prior_odds=1,
+    ):
+    """Compute the log posterior odds for a model over the original prior.
     
     Arguments
     ---------
-    model: callable, array-like (N,) or (D, M,)
+    model: callable or array-like (d, n) or (n,)
         New model prior.
-        - If a callable it should return the correctly normalized model
-          density for an input array-like (D, N,).
-        - If an array-like (N,) it should contain evaluations of the model
-          at pe_samples.
-        - If an array-like (D, M,) it should contain model samples that can
-          be used to construct a density estimate.
+        - If a callable it should return the log PDF of the model for an
+          input array-like (d, k) of d-dimensional samples.
+        - If an array-like (d, n) it should contain d-dimensional model
+          samples. Univariate data can have shape (n,).
 
-    pe_samples: array-like (N,) or (D, N,)
-        Samples from a parameter estimation posterior.
-        Can be one-dimensional for univariate data with N samples.
-        Must have shape (D, N,) for D-dimensional data.
-
-    pe_prior: callable, array-like (N,) or (D, K,)
+    prior: callable or array-like (d, m) or (m,)
         Parameter estimation prior.
-        - If a callable it should return the correctly normalized prior
-          density for an input array-like (D, N,).
-        - If an array-like (N,) it should contain evaluations of the prior
-          at pe_samples.
-        - If an array-like (D, K,) it should contain prior samples that can
-          be used to construct a density estimate.
+        - If a callable it should return the log PDF of the original
+          parameter estimation prior for an input array-like (d, k) of d-
+          dimensional samples.
+        - If an array-like (d, m) it should contain d-dimensional prior
+          samples. Univariate data can have shape (m,).
+
+    samples: array-like (d, k)
+        Parameter estimation samples.
+        - Must have shape (d, k) for d-dimensional data.
 
     model_bounds: None, bool, or array-like [optional, Default = None]
-        Parameter bounds used for density estimate if model is samples.
+        Parameter bounds used for model KDE if not already a callable.
         - A single value applies to all parameter dimensions.
         - For univariate data an array-like (2,) is allowed.
         - For multivariate data an array-like with D rows is allowed, where
           each row is either a single value or array-like (2,).
         - In all cases a None or False indicates no bound(s), a True
-          indicates the bound is estimated from sim_samples, while a number
+          indicates the bound is estimated from samples, while a number
           gives the location of the bound.
-        See kalepy.KDE for more details.
 
-    pe_bounds: None, bool, or array-like [optional, Default = None]
-        Parameter bounds used for density estimate if pe_prior is samples.
+    prior_bounds: None, bool, or array-like [optional, Default = None]
+        Parameter bounds used for prior KDE if not already a callable.
         Allowed values as for model_bounds.
         
     prior_odds: number [optional, Default = 1]
         Prior ratio for new model over original.
-    
-    """
         
-    return ModelComparison(*args, **kwargs)() + np.log10(prior_odds)
-
-
-## TODO: change to natural log?
-## TODO: log computation
-class ModelComparison:
-    """Perform Bayesan model comparison on event posteriors.
-    
+    Returns
+    -------
+    float
+        log Bayes factor (or log posterior odds if prior_odds != 1)
     """
+    
+    log_bayes_factor = ModelComparison(
+        model, prior, samples, model_bounds, prior_bounds,
+        )()
+        
+    return log_bayes_factor + np.log(prior_odds)
+
+
+class ModelComparison:
     
     def __init__(
-        self, model, pe_samples, pe_prior, model_bounds=None, pe_bounds=None,
+        self, model, prior, samples, model_bounds=None, prior_bounds=None,
         ):
-        """Initialize comparison class with priors and posteriors.
+        """Perform Bayesan model comparison on event posteriors.
         
         Arguments
         ---------
-        model: callable, array-like (N,) or (D, M,)
+        model: callable or array-like (d, n) or (n,)
             New model prior.
-            - If a callable it should return the correctly normalized model
-              density for an input array-like (D, N,).
-            - If an array-like (N,) it should contain evaluations of the model
-              at pe_samples.
-            - If an array-like (D, M,) it should contain model samples that can
-              be used to construct a density estimate.
-            
-        pe_samples: array-like (D, N,)
-            Samples from a parameter estimation posterior.
-            Must have shape (D, N,) for D-dimensional data.
-            
-        pe_prior: callable, array-like (N,) or (D, K,)
+            - If a callable it should return the log PDF of the model for an
+              input array-like (d, k) of d-dimensional samples.
+            - If an array-like (d, n) it should contain d-dimensional model
+              samples. Univariate data can have shape (n,).
+
+        prior: callable or array-like (d, m) or (m,)
             Parameter estimation prior.
-            - If a callable it should return the correctly normalized prior
-              density for an input array-like (D, N,).
-            - If an array-like (N,) it should contain evaluations of the prior
-              at pe_samples.
-            - If an array-like (D, K,) it should contain prior samples that can
-              be used to construct a density estimate.
+            - If a callable it should return the log PDF of the original
+              parameter estimation prior for an input array-like (d, k) of d-
+              dimensional samples.
+            - If an array-like (d, m) it should contain d-dimensional prior
+              samples. Univariate data can have shape (m,).
+            
+        samples: array-like (d, k) or (k,)
+            Parameter estimation samples.
+            - Must have shape (d, k) for d-dimensional data. Univariate data
+              can have shape (k,)
             
         model_bounds: None, bool, or array-like [optional, Default = None]
-            Parameter bounds used for density estimate if model is samples.
+            Parameter bounds used for model KDE if not already a callable.
             - A single value applies to all parameter dimensions.
             - For univariate data an array-like (2,) is allowed.
             - For multivariate data an array-like with D rows is allowed, where
               each row is either a single value or array-like (2,).
             - In all cases a None or False indicates no bound(s), a True
-              indicates the bound is estimated from sim_samples, while a number
+              indicates the bound is estimated from samples, while a number
               gives the location of the bound.
-            See kalepy.KDE for more details.
             
-        pe_bounds: None, bool, or array-like [optional, Default = None]
-            Parameter bounds used for density estimate if pe_prior is samples.
+        prior_bounds: None, bool, or array-like [optional, Default = None]
+            Parameter bounds used for prior KDE if not already a callable.
             Allowed values as for model_bounds.
-        
         """
         
-        # Sample shapes should be (number of dimensions, number of samples,)
-        self.pe_samples = np.atleast_2d(pe_samples)
-        assert self.pe_samples.shape[0] < self.pe_samples.shape[1]
-        self.n_dim, self.n_pe = self.pe_samples.shape
+        self.samples = np.atleast_2d(samples)
+        self.n_dim, self.n_samples = self.samples.shape
+        assert self.n_dim < self.n_samples
         
-        # Process model and PE prior
-        self.model = self._process_prior(model, bounds=model_bounds)
-        self.pe_prior = self._process_prior(pe_prior, bounds=pe_bounds)
+        self.model = self.process_dist(model, bounds=model_bounds)
+        self.prior = self.process_dist(prior, bounds=prior_bounds)
         
-        # Cache KDE evaluations on pe_samples
-        self._cache_pdf = None
-        self._cache_prior = None
+        self.cache = None
         
     def __call__(self):
-        """Compute log_10 Bayes factor between simulation and PE prior.
         
-        Returns
-        -------
-        float
-            log_10 Bayes factor
-            
-        """
+        return self.log_bayes_factor()
         
-        if self._cache_pdf is None:
-            self._cache_pdf = self.model(self.pe_samples)
-        if self._cache_prior is None:
-            self._cache_prior = self.pe_prior(self.pe_samples)
+    def bayes_factor(self):
         
-        return self._log_bayes_factor(self._cache_pdf, self._cache_prior)
+        return np.exp(self.log_bayes_factor())
+        
+    def log_bayes_factor(self):
+        
+        if self.cache is None:
+            log_model = self.model(self.samples)
+            log_prior = self.prior(self.samples)
+            log_weights = log_model - log_prior
+            self.cache = logsumexp(log_weights) - np.log(self.n_samples)
+
+        return self.cache
+        
+    def process_dist(self, dist, bounds=None):
+        
+        if callable(dist):
+            return dist
+        
+        dist = np.atleast_2d(dist)
+        assert dist.shape[0] == self.n_dim
+        assert dist.shape[0] < dist.shape[1]
+        
+        return KDE(dist, bounds=bounds).log_pdf
+
+
+class KDE:
     
-    def _kde(self, samples, points=None, bounds=None):
-        """Construct (bounded) Gaussian kernel density estimate.
+    def __init__(self, samples, bandwidth='scott', bounds=None):
+        """Construct a (bounded) Gaussian kernel density estimate.
         
         Arguments
         ---------
-        samples: array-like (n,) or (D, n,)
-            Parameter samples used to fit the KDE to.
-            Univariate samples can have shape (n,).
-            D-dimensional samples must have shape (D, n,).
+        samples: array-like (n,) or (d, n)
+            Parameter samples used to fit the KDE.
+            - Univariate samples can have shape (n,) or (1, n).
+            - d-dimensional samples have shape (d, n)
             
-        points: array-like (m,) or (D, m,) [optional, Default = None]
-            Parameter points at which to evaluate the KDE.
-            Univariate data can have shape (n,).
-            D-dimensional data must have shape (D, m,).
+        bandwidth: str or scalar [optional, default = 'scott']
+            Bandwidth to use for the Gaussian kernels.
+            - Can be a string for rules of thumb 'scott' or 'silverman'.
+            - A scalar constant sets the bandwidth scaling manually.
+            See scipy.stats.gaussian_kde.
             
-        bounds: None, bool, or array-like [optional, Default = None]
-            Parameter bounds used to truncate the KDE.
+        bounds: None, bool, or array-like [optional, default = None]
+            Parameter boundaries to truncate the support. The inputs samples
+            are masked according to these bounds before kernel intialization.
             - A single value applies to all parameter dimensions.
             - For univariate data an array-like (2,) is allowed.
-            - For multivariate data an array-like with D rows is allowed, where
+            - For multivariate data an array-like with d rows is allowed, where
               each row is either a single value or array-like (2,).
-            - In all cases a None or False indicates no bound(s), a True
-              indicates the bound is estimated from sim_samples, while a number
+            - In all cases a None or False indicates no bound, a True
+              indicates the bound is estimated from samples, while a number
               gives the location of the bound.
-            See kalepy.KDE for more details.  
-        
-        Returns
-        -------
-        callable or array-like
-            Return a callable KDE if points is None, otherwise an array-like
-            where the KDE has been evaluated at points.
-        
         """
         
-        if not bounds:
-            kde = gaussian_kde(samples)
+        samples = np.atleast_2d(samples)
+        assert samples.shape[0] < samples.shape[1]
+        self.n_dim = samples.shape[0]
+        
+        if type(bandwidth) is str:
+            bandwidth = bandwidth.lower()
+            assert bandwidth == 'scott' or bandwidth == 'silverman'
         else:
-            kde = kalepy.KDE(samples, reflect=bounds).pdf
-            
-        if points is None:
-            return kde
-        return kde(points)
-    
-    def _bayes_factor(self, pdf, prior):
-        """ Compute the Bayes factor.
-        
-        The integral is computed as a Monte Carlo sum over posterior samples.
-        
-        Arguments
-        ---------
-        pdf: array-like (n,)
-            Density evaluations for the new model at n posterior samples.
-            
-        prior: array-like (n,)
-            Density evaluations for the original prior at n posterior samples.
-            
-        Returns
-        -------
-        number
-            Bayes factor for the new model over the original prior.
-        
-        """
-        
-        assert pdf.size == prior.size
-        
-        return np.sum(pdf / prior) / pdf.size
-    
-    def _log_bayes_factor(self, pdf, prior):
-        """ Compute the log_10 Bayes factor.
-        
-        The integral is computed as a Monte Carlo sum over posterior samples.
-        
-        Arguments
-        ---------
-        pdf: array-like (n,)
-            Density evaluations for the new model at n posterior samples.
-            
-        prior: array-like (n,)
-            Density evaluations for the original prior at n posterior samples.
-            
-        Returns
-        -------
-        number
-            log_10 Bayes factor for the new model over the original prior.
-        
-        """
+            bandwidth = float(bandwidth)
 
-        return np.log10(self._bayes_factor(pdf, prior))
-    
-    def _process_prior(self, prior, bounds=None):
-        """Process a prior model.
+        self.reflect = False
+        if bounds is not None and bounds is not False:
+            self.reflect = True
+            self.bounds = self.get_bounds(samples, bounds)
+            in_bounds = self.mask_data(samples)
+            samples = samples[:, in_bounds]
+            samples, self.n_reflections = self.reflect_samples(samples)
+            
+        self.kde = gaussian_kde(samples, bw_method=bandwidth)
         
-        Define a callable that returns density evaluations from a model.
+    def pdf(self, points):
+        """Evaluate the probability density of the KDE.
         
         Arguments
         ---------
-        prior: callable, array-like (N,) or (D, M,)
-            The model to process.
-            - If a callable it should return the correctly normalized model
-              density for an input array-like (D, N,).
-            - If an array-like (N,) it should contain evaluations of the model
-              at pe_samples.
-            - If an array-like (D, M,) it should contain model samples that can
-              be used to construct a density estimate.
-              
-        bounds: None, bool, or array-like [optional, Default = None]
-            Parameter bounds used for density estimate if prior is samples.
-            - A single value applies to all parameter dimensions.
-            - For univariate data an array-like (2,) is allowed.
-            - For multivariate data an array-like with D rows is allowed, where
-              each row is either a single value or array-like (2,).
-            - In all cases a None or False indicates no bound(s), a True
-              indicates the bound is estimated from sim_samples, while a number
-              gives the location of the bound.
-            See kalepy.KDE for more details.
-              
+        points: array-like (m,) or (d, m)
+            Parameter locations at which to evaluate the KDE.
+            - Univarate data can have shape (m,) or (1, m)
+            - d-dimensional data has shape (d, n)
+            
         Returns
         -------
-        callable
-            The callable prior model which returns density evaluations.
-        
+        array-like (m,)
+            Probability density evaluations at points.
         """
         
-        # If a callable it will be evaluated on pe_samples
-        if callable(prior):
-            _prior = prior
+        points = np.atleast_2d(points)
+        pdf = self.kde.pdf(points)
         
-        # If an array-like it can be prior evaluations or prior samples
+        if self.reflect:
+            pdf = pdf * (self.n_reflections + 1)
+            in_bounds = self.mask_data(points)
+            pdf[~in_bounds] = 0.0
+            
+        return pdf
+    
+    def log_pdf(self, points):
+        """Evaluate the log probability density of the KDE.
+        
+        Arguments
+        ---------
+        points: array-like (m,) or (d, m)
+            Parameter locations at which to evaluate the KDE.
+            - Univarate data can have shape (m,) or (1, m)
+            - d-dimensional data has shape (d, n)
+            
+        Returns
+        -------
+        array-like (m,)
+            log probability density evaluations at points.
+        """
+        
+        points = np.atleast_2d(points)
+        log_pdf = self.kde.logpdf(points)
+        
+        if self.reflect:
+            log_pdf = log_pdf + np.log(self.n_reflections + 1)
+            in_bounds = self.mask_data(points)
+            log_pdf[~in_bounds] = -np.inf
+            
+        return log_pdf
+            
+    def get_bounds(self, samples, bounds):
+        
+        if bounds is True:
+            mins = np.min(samples, axis=1)
+            maxs = np.max(samples, axis=1)
+            _bounds = np.transpose([mins, maxs])
+            
+            return _bounds
+        
+        if self.n_dim == 1:
+            assert len(bounds) == 1 or len(bounds) == 2
+            if len(bounds) == 2:
+                bounds = [bounds]
         else:
-            prior = np.atleast_1d(prior)
+            assert len(bounds) == self.n_dim
 
-            # Prior density evaluated on pe_samples
-            if prior.ndim == 1:
-                assert prior.size == self.n_pe
-                _prior = lambda _: prior
-
-            # Prior samples for density estimate to evaluate on pe_samples
-            elif prior.ndim == 2:
-                assert prior.shape[0] < prior.shape[1]
-                assert prior.shape[0] == self.n_dim
-                _prior = self._kde(prior, bounds=bounds)
+        _bounds = np.zeros((self.n_dim, 2))
+        for dim in range(self.n_dim):
+            if bounds[dim] is None or bounds[dim] is False:
+                _bounds[dim] = [-np.inf, np.inf]
+            elif bounds[dim] is True:
+                _bounds[dim] = [np.min(samples[dim]), np.max(samples[dim])]
+            else:
+                for pos in range(2):
+                    if bounds[dim][pos] is None or bounds[dim][pos] is False:
+                        _bounds[dim][pos] = [-np.inf, np.inf][pos]
+                    elif bounds[dim][pos] is True:
+                        _bounds[dim][pos] = [np.min, np.max][pos](samples[dim])
+                    else:
+                        _bounds[dim][pos] = float(bounds[dim][pos])
+                        
+        return _bounds
+                
+    def reflect_samples(self, samples):
+                
+        n_reflections = 0
+        _samples = samples.copy()
+        for dim in range(self.n_dim):
+            for pos in range(2):
+                if np.isfinite(self.bounds[dim][pos]):
+                    mirror = _samples.copy()
+                    mirror[dim] = 2 * self.bounds[dim][pos] - mirror[dim]
+                    samples = np.concatenate((samples, mirror), axis=1)
+                    n_reflections += 1
+                        
+        return samples, n_reflections
+                
             
-        return _prior
-
+    def mask_data(self, data):
+                        
+        data = np.atleast_2d(data)
+        above = np.all(data > self.bounds[:, [0]], axis=0)
+        below = np.all(data < self.bounds[:, [1]], axis=0)
+        
+        return above * below
+        
