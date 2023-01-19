@@ -295,7 +295,6 @@ class KDE:
                     n_reflections += 1
                         
         return samples, n_reflections
-                
             
     def mask_data(self, data):
                         
