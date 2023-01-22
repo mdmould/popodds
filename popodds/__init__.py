@@ -302,8 +302,8 @@ class KDE:
     def mask_data(self, data):
                         
         data = np.atleast_2d(data)
-        above = np.all(data > self.bounds[:, [0]], axis=0)
-        below = np.all(data < self.bounds[:, [1]], axis=0)
+        above = np.all(data >= self.bounds[:, [0]], axis=0)
+        below = np.all(data <= self.bounds[:, [1]], axis=0)
         
         return above * below
         
