@@ -10,8 +10,10 @@ def log_odds(
     model_bounds=None,
     prior_bounds=None,
     prior_odds=1,
+    second_model=None,
+    second_model_bounds=None,
     ):
-    """Compute the log posterior odds for a model over the original prior.
+    """log posterior odds between model and prior or two models.
     
     Arguments
     ---------
@@ -25,8 +27,8 @@ def log_odds(
     prior: callable or array-like (d, m) or (m,)
         Parameter estimation prior.
         - If a callable it should return the log PDF of the original
-          parameter estimation prior for an input array-like (d, k) of d-
-          dimensional samples.
+          parameter estimation prior for an input array-like (d, k) of
+          d-dimensional samples.
         - If an array-like (d, m) it should contain d-dimensional prior
           samples. Univariate data can have shape (m,).
 
@@ -38,8 +40,8 @@ def log_odds(
         Parameter bounds used for model KDE if not already a callable.
         - A single value applies to all parameter dimensions.
         - For univariate data an array-like (2,) is allowed.
-        - For multivariate data an array-like with D rows is allowed, where
-          each row is either a single value or array-like (2,).
+        - For multivariate data an array-like with D rows is allowed,
+          where each row is either a single value or array-like (2,).
         - In all cases a None or False indicates no bound(s), a True
           indicates the bound is estimated from samples, while a number
           gives the location of the bound.
@@ -49,7 +51,23 @@ def log_odds(
         Allowed values as for model_bounds.
         
     prior_odds: number [optional, Default = 1]
-        Prior ratio for new model over original.
+        Ratio of model priors.
+        - If second_model is None, this is the prior odds of model over
+          prior.
+        - Otherwise it is the prior odds of model over second_model.
+        
+    second_model: callable or array-like (d, n) or (n,)
+    [optional, Default = None]
+        Model to compute odds/Bayes factor against instead of the prior.
+        - If a callable it should return the log PDF of the model for an
+          input array-like (d, k) of d-dimensional samples.
+        - If an array-like (d, n) it should contain d-dimensional model
+          samples. Univariate data can have shape (n,).
+          
+    second_model_bounds: None, bool, or array-like
+    [optional, Default = None]
+        Parameter bounds used for second_model KDE if not already a
+        callable. Allowed values as for model_bounds.
         
     Returns
     -------
@@ -60,6 +78,11 @@ def log_odds(
     log_bayes_factor = ModelComparison(
         model, prior, samples, model_bounds, prior_bounds,
         )()
+    
+    if second_model is not None:
+        log_bayes_factor -= ModelComparison(
+            second_model, prior, samples, second_model_bounds, prior_bounds,
+            )()
         
     return log_bayes_factor + np.log(prior_odds)
 
