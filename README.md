@@ -15,6 +15,7 @@ The computation only requires a few ingredients:
 - `model` a new prior model or samples from it,
 - `prior` the original parameter estimation prior or samples from it
 - `samples` samples from a parameter estimation run.
+
 Optional:
 - `model_bounds` optional parameter bounds for the new prior model,
 - `prior_bounds` optional parameter bounds for the original prior model,
