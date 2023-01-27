@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 name = 'popodds'
-version = '0.2.1'
+version = '0.2.2'
 
 with open('README.md', 'r') as f:
     long_description = f.read().strip()
@@ -17,7 +17,7 @@ setup(
     author_email='mattdmould@gmail.com',
     license='MIT',
     packages=find_packages(),
-    install_requires=['numpy', 'scipy', 'kalepy'],
+    install_requires=['numpy', 'scipy'],
     python_requires='>=3.7',
     )
 
