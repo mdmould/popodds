@@ -9,6 +9,7 @@ def log_odds(
     samples,
     model_bounds=None,
     prior_bounds=None,
+    log=True,
     prior_odds=1,
     second_model=None,
     second_model_bounds=None,
@@ -19,16 +20,17 @@ def log_odds(
     ---------
     model: callable or array-like (d, n) or (n,)
         New model prior.
-        - If a callable it should return the log PDF of the model for an
-          input array-like (d, k) of d-dimensional samples.
+        - If a callable it should return the PDF of the model for an input
+          array-like (d, k) of d-dimensional samples. Should return the log
+          PDF if log = True.
         - If an array-like (d, n) it should contain d-dimensional model
           samples. Univariate data can have shape (n,).
 
     prior: callable or array-like (d, m) or (m,)
         Parameter estimation prior.
-        - If a callable it should return the log PDF of the original
-          parameter estimation prior for an input array-like (d, k) of
-          d-dimensional samples.
+        - If a callable it should return the PDF of the original parameter
+          estimation prior for an input array-like (d, k) of d-dimensional
+          samples. Should return the log PDF if log = True.
         - If an array-like (d, m) it should contain d-dimensional prior
           samples. Univariate data can have shape (m,).
 
@@ -49,6 +51,9 @@ def log_odds(
     prior_bounds: None, bool, or array-like [optional, Default = None]
         Parameter bounds used for prior KDE if not already a callable.
         Allowed values as for model_bounds.
+            
+    log: bool [optional, Default = True]
+        Callable model and prior are log PDF (True) or PDF (False).
         
     prior_odds: number [optional, Default = 1]
         Ratio of model priors.
@@ -64,7 +69,7 @@ def log_odds(
         - If an array-like (d, n) it should contain d-dimensional model
           samples. Univariate data can have shape (n,).
           
-    second_model_bounds: None, bool, or array-like
+    second_bounds: None, bool, or array-like
     [optional, Default = None]
         Parameter bounds used for second_model KDE if not already a
         callable. Allowed values as for model_bounds.
@@ -76,12 +81,12 @@ def log_odds(
     """
     
     log_bayes_factor = ModelComparison(
-        model, prior, samples, model_bounds, prior_bounds,
+        model, prior, samples, model_bounds, prior_bounds, log,
         )()
     
     if second_model is not None:
         log_bayes_factor -= ModelComparison(
-            second_model, prior, samples, second_model_bounds, prior_bounds,
+            second_model, prior, samples, second_bounds, prior_bounds, log,
             )()
         
     return log_bayes_factor + np.log(prior_odds)
@@ -90,7 +95,13 @@ def log_odds(
 class ModelComparison:
     
     def __init__(
-        self, model, prior, samples, model_bounds=None, prior_bounds=None,
+        self,
+        model,
+        prior,
+        samples,
+        model_bounds=None,
+        prior_bounds=None,
+        log=True,
         ):
         """Perform Bayesan model comparison on event posteriors.
         
@@ -98,16 +109,17 @@ class ModelComparison:
         ---------
         model: callable or array-like (d, n) or (n,)
             New model prior.
-            - If a callable it should return the log PDF of the model for an
-              input array-like (d, k) of d-dimensional samples.
+            - If a callable it should return the PDF of the model for an input
+              array-like (d, k) of d-dimensional samples. Should return the log
+              PDF if log = True.
             - If an array-like (d, n) it should contain d-dimensional model
               samples. Univariate data can have shape (n,).
 
         prior: callable or array-like (d, m) or (m,)
             Parameter estimation prior.
-            - If a callable it should return the log PDF of the original
-              parameter estimation prior for an input array-like (d, k) of d-
-              dimensional samples.
+            - If a callable it should return the PDF of the original parameter
+              estimation prior for an input array-like (d, k) of d-dimensional
+              samples. Should return the log PDF if log = True.
             - If an array-like (d, m) it should contain d-dimensional prior
               samples. Univariate data can have shape (m,).
             
@@ -129,11 +141,16 @@ class ModelComparison:
         prior_bounds: None, bool, or array-like [optional, Default = None]
             Parameter bounds used for prior KDE if not already a callable.
             Allowed values as for model_bounds.
+            
+        log: bool [optional, Default = True]
+            Callable model and prior are log PDF (True) or PDF (False).
         """
         
         self.samples = np.atleast_2d(samples)
         self.n_dim, self.n_samples = self.samples.shape
         assert self.n_dim < self.n_samples
+        
+        self.log = log
         
         self.model = self.process_dist(model, bounds=model_bounds)
         self.prior = self.process_dist(prior, bounds=prior_bounds)
@@ -151,10 +168,13 @@ class ModelComparison:
     def log_bayes_factor(self):
         
         if self.cache is None:
-            log_model = self.model(self.samples)
-            log_prior = self.prior(self.samples)
-            log_weights = log_model - log_prior
-            self.cache = logsumexp(log_weights) - np.log(self.n_samples)
+            model = self.model(self.samples)
+            prior = self.prior(self.samples)
+            
+            if self.log:
+                self.cache = logsumexp(model - prior) - np.log(self.n_samples)
+            else:
+                self.cache = np.log(np.mean(model / prior))
 
         return self.cache
         
@@ -167,6 +187,8 @@ class ModelComparison:
         assert dist.shape[0] == self.n_dim
         assert dist.shape[0] < dist.shape[1]
         
-        return KDE(dist, bounds=bounds).log_pdf
-
-
+        kde = KDE(dist, bounds=bounds)
+        
+        if self.log:
+            return kde.log_pdf
+        return kde.pdf
