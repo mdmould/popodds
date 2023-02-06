@@ -14,7 +14,7 @@ def log_odds(
     second_model=None,
     second_model_bounds=None,
     ):
-    """log posterior odds between model and prior or two models.
+    """log posterior odds between model and prior or between two models.
     
     Arguments
     ---------

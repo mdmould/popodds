@@ -21,4 +21,4 @@ Optional:
 - `prior_bounds` optional parameter bounds for the original prior model,
 - `prior_odds` optional odds between the priors, which defaults to unity,
 - `second_model` option model to compute odds against instead of prior,
-- `second_model_bounds` optional parameter bounds for the second model.
+- `second_bounds` optional parameter bounds for the second model.
