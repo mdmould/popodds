@@ -19,6 +19,7 @@ The computation only requires a few ingredients:
 Optional:
 - `model_bounds` optional parameter bounds for the new prior model,
 - `prior_bounds` optional parameter bounds for the original prior model,
+- `log` option to compute probability densities in log space,
 - `prior_odds` optional odds between the priors, which defaults to unity,
-- `second_model` option model to compute odds against instead of prior,
+- `second_model` optional model to compute odds against instead of prior,
 - `second_bounds` optional parameter bounds for the second model.
