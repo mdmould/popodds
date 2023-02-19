@@ -192,3 +192,84 @@ class ModelComparison:
         if self.log:
             return kde.log_pdf
         return kde.pdf
+    
+    
+def heuristic_fraction(model, samples, quantile=0.9):
+    """Compute number of model samples in posterior quantile.
+    
+    Arguments
+    ---------
+    model: array-like (d, n) or (n,)
+        Model samples.
+        - Must have shape (d, k) for d-dimensional data. Univariate data
+          can have shape (k,)
+
+    samples: array-like (d, k) or (k,)
+        Parameter estimation samples.
+        - Must have shape (d, k) for d-dimensional data. Univariate data
+          can have shape (k,)
+          
+    quantile: float [optional, Default = 0.9]
+        The symmetric central quantile level to define the posterior region.
+          
+    Returns
+    -------
+    float
+        Heuristic fraction.
+    """
+    
+    model = np.atleast_2d(model)
+    samples = np.atleast_2d(samples)
+
+    quantiles = 0.5 - quantile / 2, 0.5 + quantile / 2
+    bounds = np.quantile(samples, quantiles, axis=1)[..., None]
+
+    marginals = (bounds[0] < model) * (model < bounds[1])
+    box = np.all(marginals, axis=0)
+    
+    return np.sum(box) / np.shape(model)[-1]
+
+
+def relative_fraction(model, prior, samples, quantile=0.9):
+    """Compute relative number of model/prior samples in posterior quantile.
+    
+    Arguments
+    ---------
+    model: array-like (d, n) or (n,)
+        Model samples.
+        - Must have shape (d, k) for d-dimensional data. Univariate data
+          can have shape (k,)
+          
+    prior: array-like (d, n) or (n,)
+        Prior samples.
+        - Must have shape (d, k) for d-dimensional data. Univariate data
+          can have shape (k,)
+
+    samples: array-like (d, k) or (k,)
+        Parameter estimation samples.
+        - Must have shape (d, k) for d-dimensional data. Univariate data
+          can have shape (k,)
+          
+    quantile: float [optional, Default = 0.9]
+        The symmetric central quantile level to define the posterior region.
+          
+    Returns
+    -------
+    float
+        Model heuristic fraction relative to prior heuristic fraction.
+    """
+    
+    model = np.atleast_2d(model)
+    prior = np.atleast_2d(prior)
+    samples = np.atleast_2d(samples)
+    
+    quantiles = 0.5 - quantile / 2, 0.5 + quantile / 2
+    bounds = np.quantile(samples, quantiles, axis=1)[..., None]
+    
+    box_model = np.all((bounds[0] < model) * (model < bounds[1]), axis=0)
+    box_prior = np.all((bounds[0] < prior) * (prior < bounds[1]), axis=0)
+    
+    return (
+        (np.sum(box_model) / np.shape(model)[-1]) /
+        (np.sum(box_prior) / np.shape(prior)[-1])
+        )
