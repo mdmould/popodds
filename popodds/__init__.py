@@ -1,5 +1,9 @@
 import numpy as np
 from scipy.special import logsumexp
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
+from scipy.optimize import minimize_scalar
+from astropy.cosmology import Planck15
 from kaydee import KDE
 
 
@@ -273,3 +277,40 @@ def relative_fraction(model, prior, samples, quantile=0.9):
         (np.sum(box_model) / np.shape(model)[-1]) /
         (np.sum(box_prior) / np.shape(prior)[-1])
         )
+
+
+class UniformSourceFrame:
+    
+    def __init__(self, z_min=0, z_max=2.3):
+        
+        self.z_min = z_min
+        self.z_max = z_max
+        z = np.linspace(z_min, z_max, 1000)
+        dVdz = 4 * np.pi * Planck15.differential_comoving_volume(z).value
+        self.dVdz = inter1pd(z, dVdz)
+        self.norm = quad(self.model, z_min, z_max)[0]
+        self.max_prob = -minimize_scalar(
+            lambda z: -self.prob(z), bounds=(z_min, z_max),
+            ).fun
+        
+    def prob(self, z):
+        
+        return (self.z_min < z) * (z < self.z_max) * self.model(z) / self.norm
+        
+    def model(self, z):
+        
+        return self.dVdz(z) / (1 + z)
+    
+    def sample(self, n=1):
+        
+        zs = []
+        while len(zs) < n:
+            z = np.random.uniform(self.z_min, self.z_max)
+            p = np.random.uniform(0, self.max_prob)
+            if p < self.prob(z):
+                zs.append(z);
+                
+        return np.array(zs)
+    
+
+
