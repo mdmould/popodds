@@ -17,7 +17,6 @@ setup(
     author_email='mattdmould@gmail.com',
     license='MIT',
     packages=find_packages(),
-    install_requires=['numpy', 'scipy', 'kaydee', 'astropy', 'pycbc'],
+    install_requires=['numpy', 'scipy', 'kaydee'],
     python_requires='>=3.7',
     )
-

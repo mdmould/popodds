@@ -1,9 +1,5 @@
 import numpy as np
 from scipy.special import logsumexp
-from scipy.interpolate import interp1d
-from scipy.integrate import quad
-from scipy.optimize import minimize_scalar
-from astropy.cosmology import Planck15
 from kaydee import KDE
 
 
@@ -17,6 +13,7 @@ def log_odds(
     prior_odds=1,
     second_model=None,
     second_bounds=None,
+    detectable=None,
     ):
     """log posterior odds between model and prior or between two models.
     
@@ -73,10 +70,19 @@ def log_odds(
         - If an array-like (d, n) it should contain d-dimensional model
           samples. Univariate data can have shape (n,).
           
-    second_bounds: None, bool, or array-like
-    [optional, Default = None]
+    second_bounds: None, bool, or array-like [optional, Default = None]
         Parameter bounds used for second_model KDE if not already a
         callable. Allowed values as for model_bounds.
+
+    detectable: None or dict [optional, Default = None]
+        Detectable sources to compute the population detection fraction form.
+        - If None then the odds between astrophysical populations is returned.
+        - Otherwise it must be a dict with 'prior' and 'samples' keys.
+        - detectable['samples'] is an array-like (d, l) of detectable sources.
+          Univariate data can hav shape (l,).
+        - detectable['prior'] is the PDF of injected (NOT detectable) sources.
+          It is either a function that returns the PDF or an array-like (l,) of
+          PDF evaluations on detectable['samples']; log PDF if log = True.
         
     Returns
     -------
@@ -84,15 +90,45 @@ def log_odds(
         log Bayes factor (or log posterior odds if prior_odds != 1)
     """
     
-    log_bayes_factor = ModelComparison(
+    mc = ModelComparison(
         model, prior, samples, model_bounds, prior_bounds, log,
-        )()
+        )
+    log_bayes_factor = mc()
     
     if second_model is not None:
-        log_bayes_factor -= ModelComparison(
+        second_mc = ModelComparison(
             second_model, prior, samples, second_bounds, prior_bounds, log,
             )()
+        log_bayes_factor -= second_mc()
         
+    # Reuse the ModelComparison class to compute the detectable fraction
+    # because the form of the integral is the same.
+    # The number of injections cancels out.
+    if detectable is not None:
+        assert sorted(list(detectable.keys())) == ['prior', 'samples']
+
+        samples = np.atleast_2d(detectable['samples'])
+        assert samples.shape[0] == mc.n_dim
+        assert samples.shape[0] < samples.shape[1]
+        
+        if callable(detectable['prior']):
+            prior = detectable['prior']
+        else:
+            assert len(np.shape(detectable['prior'])) == 1
+            assert np.size(detectable['prior']) == samples.shape[1]
+            prior = lambda _: np.array(detectable['prior'])
+        
+        log_bayes_factor -= ModelComparison(
+            mc.model, prior, samples, log=log,
+            )()
+        
+        log_bayes_factor += ModelComparison(
+            mc.prior if second_model is None else second_mc.model,
+            prior,
+            samples,
+            log=log,
+            )
+
     return log_bayes_factor + np.log(prior_odds)
 
 
@@ -175,10 +211,11 @@ class ModelComparison:
             model = self.model(self.samples)
             prior = self.prior(self.samples)
             
-            if self.log:
-                self.cache = logsumexp(model - prior) - np.log(self.n_samples)
-            else:
-                self.cache = np.log(np.mean(model / prior))
+            if not self.log:
+                model = np.log(model)
+                prior = np.log(prior)
+                
+            self.cache = logsumexp(model - prior) - np.log(self.n_samples)
 
         return self.cache
         
@@ -277,40 +314,3 @@ def relative_fraction(model, prior, samples, quantile=0.9):
         (np.sum(box_model) / np.shape(model)[-1]) /
         (np.sum(box_prior) / np.shape(prior)[-1])
         )
-
-
-class UniformSourceFrame:
-    
-    def __init__(self, z_min=0, z_max=2.3):
-        
-        self.z_min = z_min
-        self.z_max = z_max
-        z = np.linspace(z_min, z_max, 1000)
-        dVdz = 4 * np.pi * Planck15.differential_comoving_volume(z).value
-        self.dVdz = inter1pd(z, dVdz)
-        self.norm = quad(self.model, z_min, z_max)[0]
-        self.max_prob = -minimize_scalar(
-            lambda z: -self.prob(z), bounds=(z_min, z_max),
-            ).fun
-        
-    def prob(self, z):
-        
-        return (self.z_min < z) * (z < self.z_max) * self.model(z) / self.norm
-        
-    def model(self, z):
-        
-        return self.dVdz(z) / (1 + z)
-    
-    def sample(self, n=1):
-        
-        zs = []
-        while len(zs) < n:
-            z = np.random.uniform(self.z_min, self.z_max)
-            p = np.random.uniform(0, self.max_prob)
-            if p < self.prob(z):
-                zs.append(z);
-                
-        return np.array(zs)
-    
-
-

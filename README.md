@@ -17,9 +17,10 @@ The computation only requires a few ingredients:
 - `samples` samples from a parameter estimation run.
 
 Optional:
-- `model_bounds` optional parameter bounds for the new prior model,
-- `prior_bounds` optional parameter bounds for the original prior model,
-- `log` option to compute probability densities in log space,
-- `prior_odds` optional odds between the priors, which defaults to unity,
-- `second_model` optional model to compute odds against instead of prior,
-- `second_bounds` optional parameter bounds for the second model.
+- `model_bounds` parameter bounds for the new prior model,
+- `prior_bounds` parameter bounds for the original prior model,
+- `log` compute probability densities in log space,
+- `prior_odds` odds between the prior models, which defaults to unity,
+- `second_model` model to compute odds against instead of prior,
+- `second_bounds` parameter bounds for the second model,
+- `detectable` compare between detectable rather than intrinsic populations.
