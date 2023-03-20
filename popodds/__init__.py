@@ -98,7 +98,7 @@ def log_odds(
     if second_model is not None:
         second_mc = ModelComparison(
             second_model, prior, samples, second_bounds, prior_bounds, log,
-            )()
+            )
         log_bayes_factor -= second_mc()
 
     # Reuse the ModelComparison class to compute the detectable fraction
@@ -127,7 +127,7 @@ def log_odds(
             prior,
             samples,
             log=log,
-            )
+            )()
 
     return log_bayes_factor + np.log(prior_odds)
 
