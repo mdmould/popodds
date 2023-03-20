@@ -75,14 +75,14 @@ def log_odds(
         callable. Allowed values as for model_bounds.
 
     detectable: None or dict [optional, Default = None]
-        Detectable sources to compute the population detection fraction form.
+        Detectable sources to compute the population detection fraction from.
         - If None then the odds between astrophysical populations is returned.
         - Otherwise it must be a dict with 'prior' and 'samples' keys.
         - detectable['samples'] is an array-like (d, l) of detectable sources.
           Univariate data can hav shape (l,).
-        - detectable['prior'] is the PDF of injected (NOT detectable) sources.
-          It is either a function that returns the PDF or an array-like (l,) of
-          PDF evaluations on detectable['samples']; log PDF if log = True.
+        - detectable['prior'] is the PDF of all injected sources. It is either
+          a function that returns the PDF or an array-like (l,) of PDF
+          evaluations on detectable['samples']; log PDF if log = True.
         
     Returns
     -------
