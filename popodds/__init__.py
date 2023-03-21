@@ -103,7 +103,7 @@ def log_odds(
 
     # Reuse the ModelComparison class to compute the detectable fraction
     # because the form of the integral is the same.
-    # The number of injections cancels out.
+    # The total number of injections cancels out.
     if detectable is not None:
         assert sorted(list(detectable.keys())) == ['prior', 'samples']
 
