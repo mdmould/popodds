@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 name = 'popodds'
-version = '0.5.3'
+version = '0.6.0'
 
 with open('README.md', 'r') as f:
     long_description = f.read().strip()
