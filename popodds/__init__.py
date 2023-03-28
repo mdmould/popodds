@@ -7,13 +7,16 @@ def log_odds(
     model,
     prior,
     samples,
+    log=True,
     model_bounds=None,
     prior_bounds=None,
-    log=True,
+    model_kwargs={},
+    prior_kwargs={},
     prior_odds=1,
+    detectable=None,
     second_model=None,
     second_bounds=None,
-    detectable=None,
+    second_kwargs={},
     ):
     """log posterior odds between model and prior or between two models.
 
@@ -39,6 +42,9 @@ def log_odds(
         Parameter estimation samples.
         - Must have shape (d, k) for d-dimensional data.
 
+    log: bool [optional, Default = True]
+        Callable model and prior are log PDF (True) or PDF (False).
+
     model_bounds: None, bool, or array-like [optional, Default = None]
         Parameter bounds used for model KDE if not already a callable.
         - A single value applies to all parameter dimensions.
@@ -53,14 +59,27 @@ def log_odds(
         Parameter bounds used for prior KDE if not already a callable.
         Allowed values as for model_bounds.
 
-    log: bool [optional, Default = True]
-        Callable model and prior are log PDF (True) or PDF (False).
+    model_kwargs: dict [optional, Default = {}]
+        Keyword arguments for model function or constructed KDE.
+
+    prior_kwargs: dict [optional, Default = {}]
+        Keyword arguments for prior function or constructed KDE.
 
     prior_odds: number [optional, Default = 1]
         Ratio of model priors.
         - If second_model is None, this is the prior odds of model over
           prior.
         - Otherwise it is the prior odds of model over second_model.
+
+    detectable: None or dict [optional, Default = None]
+        Detectable sources to compute the population detection fraction from.
+        - If None then the odds between astrophysical populations is returned.
+        - Otherwise it must be a dict with 'prior' and 'samples' keys.
+        - detectable['samples'] is an array-like (d, l) of detectable sources.
+          Univariate data can hav shape (l,).
+        - detectable['prior'] is the PDF of all injected sources. It is either
+          a function that returns the PDF or an array-like (l,) of PDF
+          evaluations on detectable['samples']; log PDF if log = True.
 
     second_model: callable or array-like (d, n) or (n,)
     [optional, Default = None]
@@ -74,15 +93,8 @@ def log_odds(
         Parameter bounds used for second_model KDE if not already a
         callable. Allowed values as for model_bounds.
 
-    detectable: None or dict [optional, Default = None]
-        Detectable sources to compute the population detection fraction from.
-        - If None then the odds between astrophysical populations is returned.
-        - Otherwise it must be a dict with 'prior' and 'samples' keys.
-        - detectable['samples'] is an array-like (d, l) of detectable sources.
-          Univariate data can hav shape (l,).
-        - detectable['prior'] is the PDF of all injected sources. It is either
-          a function that returns the PDF or an array-like (l,) of PDF
-          evaluations on detectable['samples']; log PDF if log = True.
+    second_kwargs: dict [optional, Default = {}]
+        Keyword arguments for second_model function or constructed KDE.
 
     Returns
     -------
@@ -91,13 +103,17 @@ def log_odds(
     """
 
     mc = ModelComparison(
-        model, prior, samples, model_bounds, prior_bounds, log,
+        model, prior, samples, log,
+        model_bounds, prior_bounds,
+        model_kwargs, prior_kwargs,
         )
     log_bayes_factor = mc()
 
     if second_model is not None:
         second_mc = ModelComparison(
-            second_model, prior, samples, second_bounds, prior_bounds, log,
+            second_model, prior, samples, log,
+            second_bounds, prior_bounds,
+            second_kwargs, prior_kwargs,
             )
         log_bayes_factor -= second_mc()
 
@@ -119,14 +135,15 @@ def log_odds(
             prior = lambda _: np.array(detectable['prior'])
 
         log_bayes_factor -= ModelComparison(
-            mc.model, prior, samples, log=log,
+            mc.model, prior, samples, log, model_kwargs=model_kwargs,
             )()
 
         log_bayes_factor += ModelComparison(
             mc.prior if second_model is None else second_mc.model,
             prior,
             samples,
-            log=log,
+            log,
+            model_kwargs={} if second_model is None else second_kwargs,
             )()
 
     return log_bayes_factor + np.log(prior_odds)
@@ -139,9 +156,11 @@ class ModelComparison:
         model,
         prior,
         samples,
+        log=True,
         model_bounds=None,
         prior_bounds=None,
-        log=True,
+        model_kwargs={},
+        prior_kwargs={},
         ):
         """Perform Bayesan model comparison on event posteriors.
 
@@ -168,6 +187,9 @@ class ModelComparison:
             - Must have shape (d, k) for d-dimensional data. Univariate data
               can have shape (k,)
 
+        log: bool [optional, Default = True]
+            Callable model and prior are log PDF (True) or PDF (False).
+
         model_bounds: None, bool, or array-like [optional, Default = None]
             Parameter bounds used for model KDE if not already a callable.
             - A single value applies to all parameter dimensions.
@@ -182,8 +204,11 @@ class ModelComparison:
             Parameter bounds used for prior KDE if not already a callable.
             Allowed values as for model_bounds.
 
-        log: bool [optional, Default = True]
-            Callable model and prior are log PDF (True) or PDF (False).
+        model_kwargs: dict [optional, Default = {}]
+            Keyword arguments for model function or constructed KDE.
+
+        prior_kwargs: dict [optional, Default = {}]
+            Keyword arguments for prior function or constructed KDE.
         """
 
         self.samples = np.atleast_2d(samples)
@@ -194,6 +219,9 @@ class ModelComparison:
 
         self.model = self.process_dist(model, bounds=model_bounds)
         self.prior = self.process_dist(prior, bounds=prior_bounds)
+        
+        self.model_kwargs = model_kwargs
+        self.prior_kwargs = prior_kwargs
 
         self.cache = None
 
@@ -208,8 +236,8 @@ class ModelComparison:
     def log_bayes_factor(self):
 
         if self.cache is None:
-            model = self.model(self.samples)
-            prior = self.prior(self.samples)
+            model = self.model(self.samples, **self.model_kwargs)
+            prior = self.prior(self.samples, **self.prior_kwargs)
 
             if not self.log:
                 model = np.log(model)
